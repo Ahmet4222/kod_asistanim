@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Minecraft Survival WebGL Engine</title>
+<style>
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #87ceeb; font: 12px 'Courier New', monospace;
+    color: #fff; user-select: none;
+  }
+  canvas { display: block; }
+  #ov {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; background: rgba(0,0,0,0.75);
+    cursor: pointer; text-align: center; line-height: 1.9; z-index: 20;
+  }
+  #ov b { font-size: 32px; letter-spacing: 2px; margin-bottom: 10px; color: #55ff55; text-shadow: 2px 2px #000; }
+  #cr {
+    position: fixed; left: 50%; top: 50%; width: 18px; height: 18px;
+    margin: -9px; pointer-events: none; mix-blend-mode: difference; z-index: 5;
+  }
+  #cr:before, #cr:after { content: ""; position: absolute; background: #fff; }
+  #cr:before { left: 8px; top: 0; width: 2px; height: 18px; }
+  #cr:after { top: 8px; left: 0; height: 2px; width: 18px; }
+  
+  /* HUD & Action Bar */
+  #hud-bottom {
+    position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 5;
+  }
+  #status-bars {
+    display: flex; justify-content: space-between; width: 360px; padding: 0 4px;
+    text-shadow: 1px 1px #000; font-weight: bold;
+  }
+  .bar-group { display: flex; gap: 1px; }
+  .icon-heart, .icon-drumstick {
+    width: 9px; height: 9px; display: inline-block; image-rendering: pixelated; position: relative;
+  }
+  .icon-heart { background-color: #ff2222; border: 1px solid #000; }
+  .icon-heart.empty { background-color: #551111; }
+  .icon-drumstick { background-color: #b5651d; border: 1px solid #000; border-radius: 2px; }
+  .icon-drumstick.empty { background-color: #4a2810; }
+
+  #bname {
+    background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 3px;
+    font-weight: bold; text-shadow: 1px 1px #000; font-size: 11px;
+  }
+  #hb {
+    display: flex; gap: 2px; background: #b8b8b8;
+    padding: 3px; border: 2px solid #373737;
+    box-shadow: inset -2px -2px #fff, inset 2px 2px #555;
+  }
+  .slot {
+    width: 36px; height: 36px; border: 2px solid #373737; background: #8b8b8b;
+    display: flex; align-items: center; justify-content: center; position: relative;
+    image-rendering: pixelated; box-sizing: border-box; cursor: pointer;
+    box-shadow: inset 2px 2px #373737, inset -2px -2px #fff;
+  }
+  .slot.on { border-color: #fff; box-shadow: inset 2px 2px #222, inset -2px -2px #ddd, 0 0 0 2px #fff; }
+  .slot canvas { width: 24px; height: 24px; image-rendering: pixelated; }
+  .slot span { position: absolute; bottom: 1px; right: 2px; font-size: 10px; font-weight: bold; text-shadow: 1px 1px #000; color: #fff; }
+
+  /* Envanter Ekranı (Minecraft Klasik GUI) */
+  #inv-screen {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none;
+    align-items: center; justify-content: center; z-index: 15;
+  }
+  #inv-window {
+    background: #c6c6c6; border: 3px solid #373737; padding: 12px; color: #3f3f3f;
+    box-shadow: inset -3px -3px #fff, inset 3px 3px #555, 0 10px 30px rgba(0,0,0,0.8);
+    display: flex; flex-direction: column; gap: 10px; font-family: 'Courier New', monospace; width: 350px;
+  }
+  .inv-top-section {
+    display: flex; justify-content: space-between; align-items: center; background: #c6c6c6;
+  }
+  .armor-column { display: flex; flex-direction: column; gap: 3px; }
+  .player-preview-box {
+    width: 70px; height: 110px; background: #111; border: 2px solid #373737;
+    box-shadow: inset 2px 2px #555, inset -2px -2px #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .crafting-section { display: flex; align-items: center; gap: 8px; }
+  .craft-grid-2x2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px; }
+  .craft-arrow { font-size: 18px; font-weight: bold; color: #3f3f3f; }
+  .recipe-book-btn {
+    width: 26px; height: 26px; background: #8b8b8b; border: 2px solid #373737;
+    box-shadow: inset 1px 1px #fff, inset -1px -1px #555; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .main-inv-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px; margin-top: 4px; }
+  .inv-divider { border-top: 2px solid #8b8b8b; border-bottom: 2px solid #fff; margin: 4px 0; }
+
+  #st {
+    position: fixed; top: 10px; left: 10px;
+    text-shadow: 1px 1px #000; line-height: 1.5; z-index: 5;
+    background: rgba(0,0,0,0.3); padding: 4px 8px; pointer-events: none;
+  }
+  #uw {
+    position: fixed; inset: 0; background: rgba(25, 65, 165, 0.42);
+    pointer-events: none; display: none; z-index: 4;
+  }
+  #death-screen {
+    position: fixed; inset: 0; background: rgba(150, 0, 0, 0.6); display: none;
+    flex-direction: column; align-items: center; justify-content: center; z-index: 25; font-size: 26px; font-weight: bold; text-shadow: 2px 2px #000;
+  }
+</style>
+</head>
+<body>
+<div id="uw"></div>
+<div id="cr"></div>
+<div id="st"></div>
+
+<div id="hud-bottom">
+  <div id="status-bars">
+    <div class="bar-group" id="hearts-container"></div>
+    <div class="bar-group" id="hunger-container"></div>
+  </div>
+  <div id="bname">Çimen Bloğu</div>
+  <div id="hb"></div>
+</div>
+
+<div id="inv-screen">
+  <div id="inv-window">
+    <div style="font-weight: bold; font-size: 13px;">Envanter</div>
+    <div class="inv-top-section">
+      <div class="armor-column" id="armor-slots"></div>
+      <div class="player-preview-box">
+        <canvas id="skin-canvas" width="40" height="80" style="image-rendering: pixelated;"></canvas>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+        <div class="crafting-section">
+          <div class="craft-grid-2x2" id="craft-grid-2x2"></div>
+          <div class="craft-arrow">➔</div>
+          <div class="slot" id="craft-output-slot" style="width:36px;height:36px;"></div>
+        </div>
+        <div class="recipe-book-btn" title="Tarif Kitabı">📖</div>
+      </div>
+    </div>
+    <div class="main-inv-grid" id="main-inv-grid"></div>
+    <div class="inv-divider"></div>
+    <div class="main-inv-grid" id="hotbar-inv-grid"></div>
+  </div>
+</div>
+
+<div id="death-screen">
+  Öldün!<br><br>
+  <button id="respawn-btn" style="padding: 8px 16px; font-size: 16px; cursor: pointer; background: #8b8b8b; color: #fff; border: 2px solid #373737; font-family:'Courier New', monospace; font-weight:bold; box-shadow: inset -2px -2px #333, inset 2px 2px #fff;">Yeniden Doğ</button>
+</div>
+
+<div id="ov">
+  <b>SURVIVAL VOXEL ENGINE</b>
+  Oynamak için ekrana tıkla<br>
+  <b>WASD</b>: Hareket &nbsp;|&nbsp; <b>Ctrl</b>: Koş &nbsp;|&nbsp; <b>Space</b>: Zıpla &nbsp;|&nbsp; <b>Shift</b>: Eğil<br>
+  <b>E</b>: Envanter &nbsp;|&nbsp; <b>Sol Tık</b>: Blok Kır &nbsp;|&nbsp; <b>Sağ Tık</b>: Blok Koy &nbsp;|&nbsp; <b>F</b>: Uçuş
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ============================================================================
+   1. WEB WORKER: MAĞARALAR, MADENLER VE GREEDY MESHING
+   ============================================================================ */
+function W() {
+  const SEA = 40;
+  const T = {
+    1: [0, 2, 1],   // Çimen
+    2: [2, 2, 2],   // Toprak
+    3: [3, 3, 3],   // Taş
+    4: [5, 5, 4],   // Odun
+    5: [6, 6, 6],   // Tahta
+    6: [7, 7, 7],   // Yaprak
+    7: [8, 8, 8],   // Kum
+    8: [9, 9, 9],   // Su
+    9: [10, 10, 10],// Kömür
+    10: [11, 11, 11],// Demir
+    11: [12, 12, 12],// Altın
+    12: [13, 13, 13]// Elmas
+  };
+
+  const P = new Uint8Array(512);
+  const G = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+  const F_VAL = 0.5 * (Math.sqrt(3) - 1);
+  const Q = (3 - Math.sqrt(3)) / 6;
+
+  {
+    let s = 1337;
+    const a = [];
+    for (let i = 0; i < 256; i++) a.push(i);
+    for (let i = 255; i > 0; i--) {
+      s = (s * 16807) % 2147483647;
+      const j = s % (i + 1), t = a[i];
+      a[i] = a[j]; a[j] = t;
+    }
+    for (let i = 0; i < 512; i++) P[i] = a[i & 255];
+  }
+
+  const sn = (x, y) => {
+    const s = (x + y) * F_VAL, i = Math.floor(x + s), j = Math.floor(y + s), t = (i + j) * Q;
+    const x0 = x - i + t, y0 = y - j + t, i1 = x0 > y0 ? 1 : 0, j1 = 1 - i1;
+    const x1 = x0 - i1 + Q, y1 = y0 - j1 + Q, x2 = x0 - 1 + 2 * Q, y2 = y0 - 1 + 2 * Q;
+    const a = i & 255, b = j & 255;
+    const c = (u, v, g) => {
+      let t = 0.5 - u * u - v * v;
+      if (t < 0) return 0;
+      t *= t;
+      const r = G[g & 7];
+      return t * t * (r[0] * u + r[1] * v);
+    };
+    return 70 * (c(x0, y0, P[a + P[b]]) + c(x1, y1, P[a + i1 + P[b + j1]]) + c(x2, y2, P[a + 1 + P[b + 1]]));
+  };
+
+  const hs = (x, z) => {
+    let h = Math.imul(x, 374761393) + Math.imul(z, 668265263) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+
+  function gen(cx, cz) {
+    const d = new Uint8Array(65536), tr = [];
+    for (let z = 0; z < 16; z++) {
+      for (let x = 0; x < 16; x++) {
+        const wx = cx * 16 + x, wz = cz * 16 + z;
+        const e = 0.6 * sn(wx / 90, wz / 90) + 0.3 * sn(wx / 35, wz / 35) + 0.1 * sn(wx / 12, wz / 12);
+        const h = Math.floor(44 + e * 28);
+        const bc = h <= SEA + 1, o = x + 16 * z;
+
+        for (let y = 0; y <= h; y++) {
+          let bId = 3;
+          if (y >= h - 3 && y < h) bId = 2;
+          else if (y === h) bId = bc ? 7 : 1;
+
+          if (y < h - 4) {
+            const cave = sn(wx / 15, y / 12) + sn(wz / 15, y / 12);
+            if (Math.abs(cave) < 0.18) {
+              bId = 0;
+            } else {
+              const r = hs(wx * 7 + y, wz * 13);
+              if (y < 20 && r < 0.015) bId = 12;
+              else if (y < 30 && r < 0.025) bId = 11;
+              else if (y < 45 && r < 0.035) bId = 10;
+              else if (y < 50 && r < 0.04) bId = 9;
+            }
+          }
+          if (bId !== 0) d[o + 256 * y] = bId;
+        }
+        for (let y = h + 1; y <= SEA; y++) {
+          if (!d[o + 256 * y]) d[o + 256 * y] = 8;
+        }
+
+        if (!bc && x > 1 && x < 14 && z > 1 && z < 14) {
+          const r = hs(wx, wz);
+          if (r < 0.012) tr.push([x, h, z, r > 0.006 ? 5 : 4]);
+        }
+      }
+    }
+
+    for (const [x, h, z, n] of tr) {
+      for (let i = 1; i <= n; i++) d[x + 16 * z + 256 * (h + i)] = 4;
+      for (let dy = -2; dy <= 1; dy++) {
+        const q = dy > 0 ? 1 : 2;
+        for (let dx = -q; dx <= q; dx++) {
+          for (let dz = -q; dz <= q; dz++) {
+            if (dx * dx === 4 && dz * dz === 4) continue;
+            const i = x + dx + 16 * (z + dz) + 256 * (h + n + dy);
+            if (!d[i]) d[i] = 6;
+          }
+        }
+      }
+    }
+    return d;
+  }
+
+  function mesh(C, N) {
+    const get = (x, y, z) => {
+      if (y < 0) return 1;
+      if (y > 255) return 0;
+      let c = C;
+      if (x < 0) { if (z < 0 || z > 15) return 0; c = N[0]; x += 16; }
+      else if (x > 15) { if (z < 0 || z > 15) return 0; c = N[1]; x -= 16; }
+      else if (z < 0) { c = N[2]; z += 16; }
+      else if (z > 15) { c = N[3]; z -= 16; }
+      return c ? c[x + 16 * z + 256 * y] : 0;
+    };
+    const sol = (x, y, z) => { const t = get(x, y, z); return t && t !== 8 ? 1 : 0; };
+    const mk = () => ({ p: [], u: [], a: [], i: [] });
+    const O = [mk(), mk()], D = [16, 256, 16], AX = [[2, 1], [0, 2], [0, 1]], FB = [0.6, 1.0, 0.8];
+
+    for (let d = 0; d < 3; d++) {
+      const U = AX[d][0], V = AX[d][1], nu = D[U], nv = D[V], nd = D[d];
+      const m = new Int32Array(nu * nv), x = [0, 0, 0], p = [0, 0, 0], e = [0, 0, 0];
+
+      for (x[d] = -1; x[d] < nd; x[d]++) {
+        let n = 0;
+        for (x[V] = 0; x[V] < nv; x[V]++) {
+          for (x[U] = 0; x[U] < nu; x[U]++, n++) {
+            const a = get(x[0], x[1], x[2]);
+            const b = get(x[0] + (d === 0), x[1] + (d === 1), x[2] + (d === 2));
+            let back = -1, id = 0, c = 0;
+
+            if (x[d] >= 0 && a && (!b || (b === 8 && a !== 8))) { back = 0; id = a; }
+            else if (x[d] < nd - 1 && b && (!a || (a === 8 && b !== 8))) { back = 1; id = b; }
+
+            if (back >= 0) {
+              let ao = 255;
+              if (id !== 8) {
+                p[0] = x[0]; p[1] = x[1]; p[2] = x[2];
+                p[d] += back ? 0 : 1;
+                ao = 0;
+                for (let k = 0; k < 4; k++) {
+                  const su = k === 1 || k === 2 ? 1 : -1;
+                  const sv = k > 1 ? 1 : -1;
+                  e[0] = p[0]; e[1] = p[1]; e[2] = p[2];
+                  e[U] += su; const s1 = sol(e[0], e[1], e[2]);
+                  e[U] = p[U]; e[V] += sv; const s2 = sol(e[0], e[1], e[2]);
+                  e[U] += su; const s3 = sol(e[0], e[1], e[2]);
+                  ao |= (s1 && s2 ? 0 : 3 - s1 - s2 - s3) << (2 * k);
+                }
+              }
+              c = id + 16 * back + 32 * ao;
+            }
+            m[n] = c;
+          }
+        }
+
+        n = 0;
+        for (let j = 0; j < nv; j++) {
+          for (let i = 0; i < nu;) {
+            const c = m[n];
+            if (!c) { i++; n++; continue; }
+            let w = 1, h = 1;
+            while (i + w < nu && m[n + w] === c) w++;
+            f: for (; j + h < nv; h++) {
+              for (let k = 0; k < w; k++) if (m[n + k + h * nu] !== c) break f;
+            }
+            const id = c & 15, back = (c >> 4) & 1, ao = c >> 5;
+            const o = O[id === 8 ? 1 : 0], base = o.p.length / 3;
+            const o0 = [0, 0, 0]; o0[d] = x[d] + 1; o0[U] = i; o0[V] = j;
+            const cs = [[0, 0], [w, 0], [w, h], [0, h]];
+            const tile = d === 1 ? T[id][back ? 1 : 0] : T[id][2];
+            const fb = d === 1 && back ? 0.5 : FB[d];
+
+            for (let k = 0; k < 4; k++) {
+              const q = [o0[0], o0[1], o0[2]];
+              q[U] += cs[k][0]; q[V] += cs[k][1];
+              o.p.push(q[0], q[1], q[2]);
+              o.u.push(cs[k][0], cs[k][1]);
+              o.a.push(tile, fb * (0.5 + ((ao >> (2 * k)) & 3) / 6));
+            }
+
+            const A = [ao & 3, (ao >> 2) & 3, (ao >> 4) & 3, (ao >> 6) & 3];
+            const I = A[0] + A[2] >= A[1] + A[3] ? [0, 1, 2, 0, 2, 3] : [1, 2, 3, 1, 3, 0];
+            if ((d === 2 ? 1 : -1) !== (back ? -1 : 1)) I.reverse();
+            for (const t of I) o.i.push(base + t);
+
+            for (let l = 0; l < h; l++) for (let k = 0; k < w; k++) m[n + k + l * nu] = 0;
+            i += w; n += w;
+          }
+        }
+      }
+    }
+    return O.map(o => ({
+      p: new Float32Array(o.p),
+      u: new Float32Array(o.u),
+      a: new Float32Array(o.a),
+      i: new Uint32Array(o.i)
+    }));
+  }
+
+  self.onmessage = e => {
+    const m = e.data;
+    if (m.t === 'g') {
+      const d = gen(m.x, m.z);
+      postMessage({ t: 'g', k: m.k, d }, [d.buffer]);
+    } else {
+      const r = mesh(m.d, m.n), tr = [];
+      r.forEach(o => tr.push(o.p.buffer, o.u.buffer, o.a.buffer, o.i.buffer));
+      postMessage({ t: 'm', k: m.k, v: m.v, r }, tr);
+    }
+  };
+}
+
+/* ============================================================================
+   2. ANA THREAD: PROSEDÜREL DOKU, SES SİSTEMİ, DÜŞEN EŞYALAR VE OYUN MANTIĞI
+   ============================================================================ */
+const SKY = 0x87ceeb, R = 7, PW = 0.3, PH = 1.8;
+const C = new Map(), saved = new Map(), jobs = [], ws = [];
+let pcx = NaN, pcz = NaN;
+const key = (x, z) => x * 65536 + z;
+const dist = c => (c.x - pcx) ** 2 + (c.z - pcz) ** 2;
+
+const cv = document.createElement('canvas'); cv.width = 224; cv.height = 16;
+const cx = cv.getContext('2d');
+let sd = 7; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+
+function col(t, x, y) {
+  let c, v = 0.2;
+  switch (t) {
+    case 0: c = [88, 150, 56]; v = 0.35; break;
+    case 1: if (y < 3 + ((x * 7) % 3)) { c = [88, 150, 56]; v = 0.35; } else { c = [134, 96, 67]; v = 0.25; } break;
+    case 2: c = [134, 96, 67]; v = 0.25; break;
+    case 3: c = [125, 125, 125]; v = 0.25; break;
+    case 4: c = [104, 82, 50]; v = x % 4 ? 0.12 : 0.4; break;
+    case 5: { const m = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5)) | 0; c = m > 6 ? [104, 82, 50] : m % 2 ? [180, 144, 90] : [150, 118, 70]; v = 0.1; break; }
+    case 6: c = y % 4 === 3 ? [110, 85, 45] : [168, 134, 82]; v = 0.1; break;
+    case 7: c = [46, 118, 38]; v = 0.6; break;
+    case 8: c = [219, 207, 142]; v = 0.08; break;
+    case 9: c = [48, 96, 205]; v = 0.08; break;
+    case 10: c = [80, 80, 80]; v = (x+y)%2 ? 0.4 : 0.1; break;
+    case 11: c = [210, 160, 130]; v = (x+y)%3 ? 0.3 : 0.1; break;
+    case 12: c = [240, 220, 50]; v = (x+y)%2 ? 0.3 : 0.1; break;
+    default: c = [100, 220, 240]; v = (x+y)%3 ? 0.2 : 0.1;
+  }
+  const k = 1 + (rn() - 0.5) * v;
+  return `rgb(${(c[0] * k) | 0},${(c[1] * k) | 0},${(c[2] * k) | 0})`;
+}
+for (let t = 0; t < 14; t++) {
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      cx.fillStyle = col(t, x, y);
+      cx.fillRect(t * 16 + x, y, 1, 1);
+    }
+  }
+}
+const tex = new THREE.CanvasTexture(cv);
+tex.magFilter = tex.minFilter = THREE.NearestFilter;
+tex.generateMipmaps = false;
+
+const vs = `attribute vec2 aux; varying vec2 vU; varying float vT, vS, vD;
+void main() {
+  vU = uv; vT = aux.x; vS = aux.y;
+  vec4 m = modelViewMatrix * vec4(position, 1.0);
+  vD = -m.z;
+  gl_Position = projectionMatrix * m;
+}`;
+const fs = `uniform sampler2D map; uniform vec3 fc; uniform vec2 fr; uniform float al, light;
+varying vec2 vU; varying float vT, vS, vD;
+void main() {
+  vec2 f = clamp(fract(vU), 0.001, 0.999);
+  vec4 c = texture2D(map, vec2((vT + f.x) / 14.0, f.y));
+  vec3 lit = c.rgb * vS * light;
+  vec3 r = mix(lit, fc, smoothstep(fr.x, fr.y, vD));
+  gl_FragColor = vec4(r, al);
+}`;
+
+const UN = {
+  map: { value: tex },
+  fc: { value: new THREE.Color(SKY) },
+  fr: { value: new THREE.Vector2(R * 10, R * 15.5) },
+  light: { value: 1.0 }
+};
+const mkMat = (al, tr) => new THREE.ShaderMaterial({
+  uniforms: Object.assign({ al: { value: al } }, UN),
+  vertexShader: vs, fragmentShader: fs, transparent: tr, depthWrite: !tr
+});
+const matO = mkMat(1.0, false), matW = mkMat(0.72, true);
+
+const rd = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+rd.setPixelRatio(Math.min(devicePixelRatio, 2));
+rd.setSize(innerWidth, innerHeight);
+document.body.prepend(rd.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(SKY);
+const cam = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 600);
+cam.rotation.order = 'YXZ';
+
+addEventListener('resize', () => {
+  rd.setSize(innerWidth, innerHeight);
+  cam.aspect = innerWidth / innerHeight;
+  cam.updateProjectionMatrix();
+});
+
+const hl = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.004, 1.004, 1.004)),
+  new THREE.LineBasicMaterial({ color: 0x000000 })
+);
+hl.visible = false;
+scene.add(hl);
+
+/* Web Audio API Ses Sentezleyici */
+let actx = null;
+function getAudioContext() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+
+function playSound(type) {
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    if (type === 'break') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(140, now);
+      osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    } else if (type === 'place') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(110, now + 0.09);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    } else if (type === 'pickup') {
+      // Klasik Minecraft Eşya Alma ("Pop") Sesi
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(480, now);
+      osc.frequency.exponentialRampToValueAtTime(920, now + 0.07);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+    } else if (type === 'step') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(95 + Math.random() * 25, now);
+      osc.frequency.exponentialRampToValueAtTime(30, now + 0.06);
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    } else if (type === 'click') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(650, now);
+      osc.frequency.exponentialRampToValueAtTime(220, now + 0.04);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+    } else if (type === 'hurt') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.2);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    } else if (type === 'heal') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(520, now);
+      osc.frequency.exponentialRampToValueAtTime(780, now + 0.15);
+      gain.gain.setValueAtTime(0.04, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    }
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  } catch (e) {}
+}
+
+/* Envanter & Eşya Tanımları */
+const BLOCKS = [
+  { id: 1, tile: 1, name: 'Çimen Bloğu' },
+  { id: 2, tile: 2, name: 'Toprak' },
+  { id: 3, tile: 3, name: 'Taş' },
+  { id: 4, tile: 4, name: 'Meşe Odunu' },
+  { id: 5, tile: 6, name: 'Meşe Tahtası' },
+  { id: 6, tile: 7, name: 'Yaprak' },
+  { id: 7, tile: 8, name: 'Kum' },
+  { id: 9, tile: 10, name: 'Kömür Cevheri' },
+  { id: 10, tile: 11, name: 'Demir Cevheri' },
+  { id: 11, tile: 12, name: 'Altın Cevheri' },
+  { id: 12, tile: 13, name: 'Elmas Cevheri' }
+];
+
+let inventory = Array(36).fill(null);
+let hotbarIndex = 0;
+let craftGridState = Array(4).fill(null);
+let craftOutputState = null;
+let health = 20, hunger = 20;
+let isDead = false;
+
+inventory[0] = { id: 1, count: 64 };
+inventory[1] = { id: 3, count: 64 };
+inventory[2] = { id: 4, count: 64 };
+inventory[3] = { id: 5, count: 64 };
+
+function addToInventory(id, count = 1) {
+  // Önce aynı türden 64'ten az yığın ara
+  for (let i = 0; i < 36; i++) {
+    if (inventory[i] && inventory[i].id === id && inventory[i].count < 64) {
+      const space = 64 - inventory[i].count;
+      const toAdd = Math.min(space, count);
+      inventory[i].count += toAdd;
+      count -= toAdd;
+      if (count <= 0) { updateHUD(); return true; }
+    }
+  }
+  // Boş slot ara
+  for (let i = 0; i < 36; i++) {
+    if (!inventory[i]) {
+      inventory[i] = { id, count };
+      updateHUD();
+      return true;
+    }
+  }
+  return false;
+}
+
+/* ============================================================================
+   DÜŞEN BLOKLAR (DROPPED ITEMS) SİSTEMİ VE ANİMASYONU
+   ============================================================================ */
+const droppedItems = [];
+const dropGeo = new THREE.BoxGeometry(0.26, 0.26, 0.26);
+const dropMaterialsCache = new Map();
+
+function getDropMaterial(id) {
+  if (dropMaterialsCache.has(id)) return dropMaterialsCache.get(id);
+  const bData = BLOCKS.find(b => b.id === id) || BLOCKS[0];
+  const itemCv = document.createElement('canvas');
+  itemCv.width = 16; itemCv.height = 16;
+  itemCv.getContext('2d').drawImage(cv, bData.tile * 16, 0, 16, 16, 0, 0, 16, 16);
+  const itemTex = new THREE.CanvasTexture(itemCv);
+  itemTex.magFilter = itemTex.minFilter = THREE.NearestFilter;
+  const mat = new THREE.MeshBasicMaterial({ map: itemTex });
+  dropMaterialsCache.set(id, mat);
+  return mat;
+}
+
+function spawnDroppedItem(x, y, z, id) {
+  // Yaprak veya su kırılınca farklı drop mantığı (çimen kırılınca toprak düşer)
+  const dropId = id === 1 ? 2 : id;
+  if (!BLOCKS.some(b => b.id === dropId)) return;
+
+  const mesh = new THREE.Mesh(dropGeo, getDropMaterial(dropId));
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
+
+  droppedItems.push({
+    mesh,
+    id: dropId,
+    x, y, z,
+    vx: (Math.random() - 0.5) * 2.5,
+    vy: 2.5 + Math.random() * 1.5,
+    vz: (Math.random() - 0.5) * 2.5,
+    age: 0,
+    pickupDelay: 0.35, // Kırar kırmaz havada kaybolmaması için kısa gecikme
+    magnetizing: false
+  });
+}
+
+function updateDroppedItems(dt) {
+  for (let i = droppedItems.length - 1; i >= 0; i--) {
+    const item = droppedItems[i];
+    item.age += dt;
+    if (item.pickupDelay > 0) item.pickupDelay -= dt;
+
+    // Oyuncuya mesafe kontrolü
+    const px = P_pos[0], py = P_pos[1] + 0.7, pz = P_pos[2];
+    const dx = px - item.x, dy = py - item.y, dz = pz - item.z;
+    const distSq = dx * dx + dy * dy + dz * dz;
+
+    // Mıknatıs gibi oyuncuya çekilme animasyonu (2.2 blok mesafe)
+    if (item.pickupDelay <= 0 && distSq < 4.84) {
+      item.magnetizing = true;
+      const dist = Math.sqrt(distSq) || 0.001;
+      const pullSpeed = 12.0; // Hızlı çekim animasyonu
+      item.x += (dx / dist) * pullSpeed * dt;
+      item.y += (dy / dist) * pullSpeed * dt;
+      item.z += (dz / dist) * pullSpeed * dt;
+
+      // Oyuncuya temas edince alma
+      if (dist < 0.45) {
+        if (addToInventory(item.id, 1)) {
+          playSound('pickup');
+          scene.remove(item.mesh);
+          droppedItems.splice(i, 1);
+          continue;
+        }
+      }
+    } else if (!item.magnetizing) {
+      // Yerçekimi ve Zemin Çarpışması
+      item.vy -= 14 * dt;
+      item.x += item.vx * dt;
+      item.y += item.vy * dt;
+      item.z += item.vz * dt;
+
+      // Hava sürtünmesi
+      item.vx *= 0.94;
+      item.vz *= 0.94;
+
+      // Altındaki blok kontrolü
+      const belowBlock = gb(Math.floor(item.x), Math.floor(item.y - 0.14), Math.floor(item.z));
+      if (belowBlock && belowBlock !== 8) {
+        item.y = Math.floor(item.y - 0.14) + 1 + 0.14;
+        item.vy = 0;
+        item.vx *= 0.7;
+        item.vz *= 0.7;
+      }
+    }
+
+    // Minecraft tarzı kendi ekseninde dönme ve hafif yukarı-aşağı süzülme
+    item.mesh.rotation.y += 2.2 * dt;
+    const bobOffset = item.magnetizing ? 0 : Math.sin(item.age * 4.0) * 0.06;
+    item.mesh.position.set(item.x, item.y + bobOffset, item.z);
+
+    // 5 dakika (300 sn) sonra eski eşyaları temizle
+    if (item.age > 300) {
+      scene.remove(item.mesh);
+      droppedItems.splice(i, 1);
+    }
+  }
+}
+
+/* HUD Güncelleme */
+function updateHUD() {
+  const heartsEl = document.getElementById('hearts-container');
+  heartsEl.innerHTML = '';
+  for (let i = 0; i < 10; i++) {
+    const h = document.createElement('div');
+    h.className = 'icon-heart' + (i * 2 >= health ? ' empty' : '');
+    heartsEl.appendChild(h);
+  }
+
+  const hungerEl = document.getElementById('hunger-container');
+  hungerEl.innerHTML = '';
+  for (let i = 0; i < 10; i++) {
+    const d = document.createElement('div');
+    d.className = 'icon-drumstick' + (i * 2 >= hunger ? ' empty' : '');
+    hungerEl.appendChild(d);
+  }
+
+  const hb = document.getElementById('hb');
+  hb.innerHTML = '';
+  for (let i = 0; i < 9; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot' + (i === hotbarIndex ? ' on' : '');
+    const item = inventory[i];
+    if (item) {
+      const bData = BLOCKS.find(b => b.id === item.id);
+      if (bData) {
+        const c = document.createElement('canvas'); c.width = c.height = 16;
+        c.getContext('2d').drawImage(cv, bData.tile * 16, 0, 16, 16, 0, 0, 16, 16);
+        slot.appendChild(c);
+        const cnt = document.createElement('span');
+        cnt.textContent = item.count > 1 ? item.count : '';
+        slot.appendChild(cnt);
+      }
+    }
+    slot.onclick = () => { hotbarIndex = i; updateHUD(); playSound('click'); };
+    hb.appendChild(slot);
+  }
+  if (inventory[hotbarIndex]) {
+    const b = BLOCKS.find(x => x.id === inventory[hotbarIndex].id);
+    document.getElementById('bname').textContent = b ? b.name : '';
+  } else {
+    document.getElementById('bname').textContent = 'Boş';
+  }
+}
+
+/* Envanter GUI */
+function buildInventoryUI() {
+  const armorSlots = document.getElementById('armor-slots');
+  armorSlots.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const s = document.createElement('div');
+    s.className = 'slot';
+    armorSlots.appendChild(s);
+  }
+
+  const skinCanvas = document.getElementById('skin-canvas');
+  const sCtx = skinCanvas.getContext('2d');
+  sCtx.fillStyle = '#222'; sCtx.fillRect(0, 0, 40, 80);
+  sCtx.fillStyle = '#5588cc'; sCtx.fillRect(10, 30, 20, 30);
+  sCtx.fillStyle = '#ccaa88'; sCtx.fillRect(12, 10, 16, 18);
+
+  const craftGrid = document.getElementById('craft-grid-2x2');
+  craftGrid.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    const item = craftGridState[i];
+    if (item) {
+      const bData = BLOCKS.find(b => b.id === item.id);
+      if (bData) {
+        const c = document.createElement('canvas'); c.width = c.height = 16;
+        c.getContext('2d').drawImage(cv, bData.tile * 16, 0, 16, 16, 0, 0, 16, 16);
+        slot.appendChild(c);
+        const cnt = document.createElement('span'); cnt.textContent = item.count; slot.appendChild(cnt);
+      }
+    }
+    slot.onclick = () => {
+      if (item && item.id === 4) {
+        craftGridState[i].count--;
+        if (craftGridState[i].count <= 0) craftGridState[i] = null;
+        craftOutputState = { id: 5, count: 4 };
+        buildInventoryUI();
+        playSound('click');
+      }
+    };
+    craftGrid.appendChild(slot);
+  }
+
+  const outSlot = document.getElementById('craft-output-slot');
+  outSlot.innerHTML = '';
+  if (craftOutputState) {
+    const bData = BLOCKS.find(b => b.id === craftOutputState.id);
+    const c = document.createElement('canvas'); c.width = c.height = 16;
+    c.getContext('2d').drawImage(cv, bData.tile * 16, 0, 16, 16, 0, 0, 16, 16);
+    outSlot.appendChild(c);
+    const cnt = document.createElement('span'); cnt.textContent = craftOutputState.count; outSlot.appendChild(cnt);
+    outSlot.onclick = () => {
+      addToInventory(craftOutputState.id, craftOutputState.count);
+      craftOutputState = null;
+      buildInventoryUI();
+      playSound('click');
+    };
+  }
+
+  const mainGrid = document.getElementById('main-inv-grid');
+  mainGrid.innerHTML = '';
+  for (let i = 9; i < 36; i++) mainGrid.appendChild(createInvSlot(i));
+
+  const hotbarGrid = document.getElementById('hotbar-inv-grid');
+  hotbarGrid.innerHTML = '';
+  for (let i = 0; i < 9; i++) hotbarGrid.appendChild(createInvSlot(i));
+}
+
+function createInvSlot(idx) {
+  const slot = document.createElement('div');
+  slot.className = 'slot';
+  const item = inventory[idx];
+  if (item) {
+    const bData = BLOCKS.find(b => b.id === item.id);
+    if (bData) {
+      const c = document.createElement('canvas'); c.width = c.height = 16;
+      c.getContext('2d').drawImage(cv, bData.tile * 16, 0, 16, 16, 0, 0, 16, 16);
+      slot.appendChild(c);
+      const cnt = document.createElement('span'); cnt.textContent = item.count; slot.appendChild(cnt);
+    }
+  }
+  slot.onclick = () => {
+    playSound('click');
+    buildInventoryUI();
+    updateHUD();
+  };
+  return slot;
+}
+
+let inventoryOpen = false;
+function toggleInventory() {
+  inventoryOpen = !inventoryOpen;
+  document.getElementById('inv-screen').style.display = inventoryOpen ? 'flex' : 'none';
+  if (inventoryOpen) {
+    document.exitPointerLock();
+    buildInventoryUI();
+  } else {
+    rd.domElement.requestPointerLock();
+  }
+  updateHUD();
+}
+
+/* Worker Havuzu */
+const url = URL.createObjectURL(new Blob(['(' + W + ')()'], { type: 'text/javascript' }));
+for (let i = 0; i < Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1)); i++) {
+  const w = new Worker(url);
+  w.b = 0;
+  w.onmessage = e => { w.b = 0; done(e.data); pump(); };
+  ws.push(w);
+}
+
+function pump() {
+  jobs.forEach(j => j.p = j.f ? -1 : dist(j.c));
+  jobs.sort((a, b) => a.p - b.p);
+  for (const w of ws) {
+    while (jobs.length && jobs[0].c.dead) jobs.shift();
+    if (!w.b && jobs.length) {
+      w.b = 1;
+      w.postMessage(jobs.shift().m);
+    }
+  }
+}
+
+const nb = c => [[-1, 0], [1, 0], [0, -1], [0, 1]].map(([a, b]) => C.get(key(c.x + a, c.z + b)));
+
+function queueMesh(c, f) {
+  c.q = 1;
+  jobs.push({ c, f, m: { t: 'm', k: c.k, v: ++c.v, d: c.data, n: nb(c).map(q => q && q.data) } });
+  pump();
+}
+
+function tryMesh(c) {
+  if (!c || c.q || !c.data || dist(c) > R * R) return;
+  if (nb(c).some(q => !q || !q.data)) return;
+  queueMesh(c, 0);
+}
+
+function done(m) {
+  const c = C.get(m.k);
+  if (!c) return;
+  if (m.t === 'g') {
+    c.data = m.d;
+    tryMesh(c);
+    nb(c).forEach(tryMesh);
+  } else {
+    c.q = 0;
+    if (m.v >= c.av) {
+      c.av = m.v;
+      apply(c, m.r);
+    }
+  }
+}
+
+function clearChunk(c) {
+  c.m.forEach(m => { scene.remove(m); m.geometry.dispose(); });
+  c.m = [];
+}
+
+function apply(c, r) {
+  clearChunk(c);
+  r.forEach((o, l) => {
+    if (!o.i.length) return;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(o.p, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(o.u, 2));
+    g.setAttribute('aux', new THREE.BufferAttribute(o.a, 2));
+    g.setIndex(new THREE.BufferAttribute(o.i, 1));
+    g.computeBoundingSphere();
+    const m = new THREE.Mesh(g, l ? matW : matO);
+    m.position.set(c.x * 16, 0, c.z * 16);
+    if (l) m.renderOrder = 1;
+    scene.add(m);
+    c.m.push(m);
+  });
+}
+
+function load() {
+  const nx = Math.floor(P_pos[0]) >> 4, nz = Math.floor(P_pos[2]) >> 4;
+  if (nx === pcx && nz === pcz) return;
+  pcx = nx; pcz = nz;
+  for (let dx = -R - 1; dx <= R + 1; dx++) {
+    for (let dz = -R - 1; dz <= R + 1; dz++) {
+      if (dx * dx + dz * dz > (R + 1) ** 2) continue;
+      const x = pcx + dx, z = pcz + dz, k = key(x, z);
+      if (C.has(k)) continue;
+      const c = { x, z, k, data: saved.get(k) || null, q: 0, v: 0, av: 0, m: [], dead: 0, dirty: 0 };
+      C.set(k, c);
+      if (!c.data) jobs.push({ c, f: 0, m: { t: 'g', k, x, z } });
+    }
+  }
+  for (const c of C.values()) {
+    if (dist(c) > (R + 3) ** 2) {
+      c.dead = 1;
+      clearChunk(c);
+      if (c.dirty) saved.set(c.k, c.data);
+      C.delete(c.k);
+    }
+  }
+  C.forEach(tryMesh);
+  pump();
+}
+
+function gb(x, y, z) {
+  if (y < 0) return 1;
+  if (y > 255) return 0;
+  const c = C.get(key(x >> 4, z >> 4));
+  return c && c.data ? c.data[(x & 15) + 16 * (z & 15) + 256 * y] : 1;
+}
+
+function ed(x, z) {
+  const c = C.get(key(x, z));
+  if (c && c.data) queueMesh(c, 1);
+}
+
+function sb(x, y, z, b) {
+  const c = C.get(key(x >> 4, z >> 4));
+  if (!c || !c.data || y < 0 || y > 255) return;
+  const lx = x & 15, lz = z & 15;
+  c.data[lx + 16 * lz + 256 * y] = b;
+  c.dirty = 1;
+  queueMesh(c, 1);
+  if (lx === 0) ed(c.x - 1, c.z);
+  if (lx === 15) ed(c.x + 1, c.z);
+  if (lz === 0) ed(c.x, c.z - 1);
+  if (lz === 15) ed(c.x, c.z + 1);
+}
+
+/* ============================================================================
+   3. OYUNCU FİZİĞİ, CANLILAR VE HAYATTA KALMA (CAN YENİLENMESİ DAHİL)
+   ============================================================================ */
+const P_pos = [8.5, 120, 8.5], v = [0, 0, 0];
+let yaw = 0, pitch = 0, og = 0, sn = false, fly = false, sp = 0, tg = null, cool = 0, stepDist = 0;
+let lastFallY = 120;
+let regenTimer = 0;
+let hungerExhaustion = 0;
+
+const mobs = [];
+function spawnMob(x, y, z, type) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: type === 'zombie' ? 0x228833 : 0xcc8844 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, type === 'zombie' ? 1.4 : 0.8, 0.6), mat);
+  body.position.y = 0.7;
+  group.add(body);
+  group.position.set(x, y, z);
+  scene.add(group);
+  mobs.push({ group, type, x, y, z, vx: 0, vz: 0, timer: Math.random() * 10 });
+}
+
+function updateMobs(dt) {
+  for (const m of mobs) {
+    m.timer -= dt;
+    if (m.timer <= 0) {
+      m.timer = 3 + Math.random() * 5;
+      const angle = Math.random() * Math.PI * 2;
+      m.vx = Math.cos(angle) * 1.5;
+      m.vz = Math.sin(angle) * 1.5;
+    }
+    m.x += m.vx * dt;
+    m.z += m.vz * dt;
+    m.group.position.set(m.x, m.y, m.z);
+
+    if (m.type === 'zombie') {
+      const distToPlayer = Math.hypot(P_pos[0] - m.x, P_pos[2] - m.z);
+      if (distToPlayer < 12) {
+        const angle = Math.atan2(P_pos[2] - m.z, P_pos[0] - m.x);
+        m.x += Math.cos(angle) * 2.2 * dt;
+        m.z += Math.sin(angle) * 2.2 * dt;
+        if (distToPlayer < 1.2 && cool <= 0) {
+          health = Math.max(0, health - 2);
+          playSound('hurt');
+          updateHUD();
+          if (health <= 0 && !isDead) triggerDeath();
+        }
+      }
+    }
+  }
+}
+
+function triggerDeath() {
+  isDead = true;
+  document.getElementById('death-screen').style.display = 'flex';
+  document.exitPointerLock();
+}
+
+document.getElementById('respawn-btn').onclick = () => {
+  health = 20; hunger = 20; isDead = false;
+  P_pos[0] = 8.5; P_pos[1] = 120; P_pos[2] = 8.5;
+  document.getElementById('death-screen').style.display = 'none';
+  rd.domElement.requestPointerLock();
+  updateHUD();
+  playSound('click');
+};
+
+function hit(x, y, z) {
+  const E = 1e-5;
+  for (let i = Math.floor(x - PW + E); i <= Math.floor(x + PW - E); i++) {
+    for (let j = Math.floor(y + E); j <= Math.floor(y + PH - E); j++) {
+      for (let k = Math.floor(z - PW + E); k <= Math.floor(z + PW - E); k++) {
+        const b = gb(i, j, k);
+        if (b && b !== 8) return 1;
+      }
+    }
+  }
+  return 0;
+}
+
+function mv(a, d) {
+  const n = Math.ceil(Math.abs(d) / 0.4);
+  for (let i = 0; i < n; i++) {
+    P_pos[a] += d / n;
+    if (hit(P_pos[0], P_pos[1], P_pos[2])) {
+      if (a === 1) {
+        if (d < 0) {
+          const fallDist = lastFallY - P_pos[1];
+          if (fallDist > 5) {
+            const damage = Math.floor((fallDist - 5) * 1.5);
+            if (damage > 0) {
+              health = Math.max(0, health - damage);
+              playSound('hurt');
+              updateHUD();
+              if (health <= 0 && !isDead) triggerDeath();
+            }
+          }
+        }
+        P_pos[1] = d < 0 ? Math.floor(P_pos[1]) + 1 : Math.floor(P_pos[1] + PH) - PH - 1e-4;
+        lastFallY = P_pos[1];
+      } else {
+        P_pos[a] = d > 0 ? Math.floor(P_pos[a] + PW) - PW - 1e-4 : Math.floor(P_pos[a] - PW) + 1 + PW + 1e-4;
+      }
+      return 1;
+    }
+  }
+  return 0;
+}
+
+function mvH(a, d) {
+  const o = P_pos[a];
+  if (mv(a, d)) v[a] = 0;
+  else if (sn && og && !hit(P_pos[0], P_pos[1] - 0.6, P_pos[2])) {
+    P_pos[a] = o;
+    v[a] = 0;
+  }
+}
+
+const K = {};
+const uwEl = document.getElementById('uw');
+
+function upd(dt) {
+  if (isDead) return;
+  const fw = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0);
+  const sd = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  sn = !fly && !!(K.ShiftLeft || K.ShiftRight);
+  const sprint = !sn && fw > 0 && hunger > 6 && !!(K.ControlLeft || K.ControlRight);
+
+  const eyeY = P_pos[1] + (sn ? 1.27 : 1.62);
+  const headInW = gb(Math.floor(P_pos[0]), Math.floor(eyeY), Math.floor(P_pos[2])) === 8;
+  const feetInW = gb(Math.floor(P_pos[0]), Math.floor(P_pos[1] + 0.4), Math.floor(P_pos[2])) === 8;
+  uwEl.style.display = headInW ? 'block' : 'none';
+
+  const targetFov = sprint ? 84 : 75;
+  if (Math.abs(cam.fov - targetFov) > 0.1) {
+    cam.fov += (targetFov - cam.fov) * Math.min(1, dt * 10);
+    cam.updateProjectionMatrix();
+  }
+
+  const baseSpd = sn ? 1.3 : fly ? 12 : sprint ? 6.2 : 4.317;
+  const spd = baseSpd * (feetInW ? 0.6 : 1);
+  const l = Math.hypot(fw, sd) || 1;
+  const sy = Math.sin(yaw), cy = Math.cos(yaw);
+  const f = Math.min(1, dt * (og || fly ? 14 : 3));
+
+  v[0] += (((-sy * fw + cy * sd) / l) * spd - v[0]) * f;
+  v[2] += (((-cy * fw - sy * sd) / l) * spd - v[2]) * f;
+
+  if (fly) {
+    v[1] = ((K.Space ? 1 : 0) - (K.ShiftLeft ? 1 : 0)) * 10;
+  } else {
+    v[1] = Math.max(-78, v[1] - (feetInW ? 10 : 32) * dt);
+    if (feetInW) v[1] *= 1 - 2 * dt;
+    if (K.Space) {
+      if (feetInW) v[1] = Math.min(v[1] + 40 * dt, 4.5);
+      else if (og) { 
+        v[1] = 9; 
+        lastFallY = P_pos[1]; 
+        hungerExhaustion += 0.2;
+      }
+    }
+  }
+
+  const ox = P_pos[0], oz = P_pos[2];
+  mvH(0, v[0] * dt);
+  mvH(2, v[2] * dt);
+  og = 0;
+  if (mv(1, v[1] * dt)) {
+    if (v[1] < 0) og = 1;
+    v[1] = 0;
+  } else {
+    if (v[1] > 0) lastFallY = P_pos[1];
+  }
+
+  const movedDist = Math.hypot(P_pos[0] - ox, P_pos[2] - oz);
+  if (og && !fly) {
+    stepDist += movedDist;
+    if (sprint) hungerExhaustion += movedDist * 0.1;
+    if (stepDist > (sprint ? 2.6 : 2.1)) {
+      stepDist = 0;
+      playSound('step');
+    }
+  }
+
+  // Açlık Barı Full İse Yavaşça Can Yenilenmesi (Natural Regeneration)
+  if (hunger >= 18 && health < 20) {
+    regenTimer += dt;
+    if (regenTimer >= 3.0) { // Her 3 saniyede 1 kalp birimi (yarım kalp) yenileme
+      regenTimer = 0;
+      health = Math.min(20, health + 1);
+      hungerExhaustion += 1.5; // Can yenilenmesi açlık harcar
+      playSound('heal');
+      updateHUD();
+    }
+  } else {
+    regenTimer = 0;
+  }
+
+  // Açlık Azalması Kontrolü
+  if (hungerExhaustion >= 4.0) {
+    hungerExhaustion -= 4.0;
+    if (hunger > 0) {
+      hunger = Math.max(0, hunger - 1);
+      updateHUD();
+    }
+  }
+}
+
+function ray() {
+  const cp = Math.cos(pitch);
+  const dir = [-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp];
+  const o = [P_pos[0], P_pos[1] + (sn ? 1.27 : 1.62), P_pos[2]];
+  const c = o.map(Math.floor);
+  const st = dir.map(a => (a > 0 ? 1 : -1));
+  const td = dir.map(a => (a ? Math.abs(1 / a) : 1e30));
+  const tm = dir.map((a, i) => (a > 0 ? (c[i] + 1 - o[i]) * td[i] : a < 0 ? (o[i] - c[i]) * td[i] : 1e30));
+
+  for (;;) {
+    const ax = tm[0] < tm[1] ? (tm[0] < tm[2] ? 0 : 2) : (tm[1] < tm[2] ? 1 : 2);
+    if (tm[ax] > 5) return null;
+    c[ax] += st[ax];
+    tm[ax] += td[ax];
+    const b = gb(c[0], c[1], c[2]);
+    if (b && b !== 8) {
+      const pr = c.slice();
+      pr[ax] -= st[ax];
+      return { c: c.slice(), pr };
+    }
+  }
+}
+
+/* ============================================================================
+   4. KONTROLLER VE GİRDİLER
+   ============================================================================ */
+const ov = document.getElementById('ov');
+const st = document.getElementById('st');
+
+ov.onclick = () => {
+  if (!inventoryOpen && !isDead) rd.domElement.requestPointerLock();
+};
+
+document.addEventListener('pointerlockchange', () => {
+  const l = !!document.pointerLockElement;
+  ov.style.display = l || inventoryOpen ? 'none' : 'flex';
+  if (!l && !inventoryOpen) {
+    for (const k in K) K[k] = 0;
+    btn = [0, 0, 0];
+  }
+});
+
+let btn = [0, 0, 0];
+addEventListener('keydown', e => {
+  K[e.code] = 1;
+  if (e.code === 'KeyF' && !inventoryOpen) fly = !fly;
+  if (e.code === 'KeyE') {
+    toggleInventory();
+  }
+  const n = e.code.match(/^Digit([1-9])$/);
+  if (n && !inventoryOpen) {
+    const idx = parseInt(n[1]) - 1;
+    if (idx < 9) { hotbarIndex = idx; updateHUD(); }
+  }
+  if (e.code === 'Space') e.preventDefault();
+});
+addEventListener('keyup', e => (K[e.code] = 0));
+addEventListener('mousedown', e => {
+  if (document.pointerLockElement && !inventoryOpen) {
+    btn[e.button] = 1;
+    cool = 0;
+  }
+});
+addEventListener('mouseup', e => (btn[e.button] = 0));
+addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('wheel', e => {
+  if (document.pointerLockElement && !inventoryOpen) {
+    hotbarIndex = (hotbarIndex + (e.deltaY > 0 ? 1 : 8)) % 9;
+    updateHUD();
+  }
+});
+addEventListener('mousemove', e => {
+  if (document.pointerLockElement && !inventoryOpen) {
+    yaw -= e.movementX * 0.0022;
+    pitch = Math.max(-1.55, Math.min(1.55, pitch - e.movementY * 0.0022));
+  }
+});
+
+/* ============================================================================
+   5. ANA OYUN DÖNGÜSÜ & RENDER
+   ============================================================================ */
+let last = performance.now(), fc = 0, ft = 0, worldTime = 0.25;
+const dayColor = new THREE.Color(0x87ceeb);
+const nightColor = new THREE.Color(0x0b1021);
+const curSky = new THREE.Color();
+let mobSpawnTimer = 0;
+
+function loop(t) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (t - last) / 1000);
+  last = t;
+
+  worldTime = (worldTime + dt * 0.0016) % 1;
+  const sunAngle = worldTime * Math.PI * 2;
+  const dayFactor = Math.max(0.18, Math.min(1.0, Math.sin(sunAngle) * 1.4 + 0.5));
+  curSky.copy(nightColor).lerp(dayColor, dayFactor);
+  scene.background.copy(curSky);
+  UN.fc.value.copy(curSky);
+  UN.light.value = dayFactor;
+
+  load();
+
+  mobSpawnTimer += dt;
+  if (mobSpawnTimer > 5 && mobs.length < 15) {
+    mobSpawnTimer = 0;
+    const angle = Math.random() * Math.PI * 2;
+    const distM = 15 + Math.random() * 15;
+    const mx = Math.floor(P_pos[0] + Math.cos(angle) * distM);
+    const mz = Math.floor(P_pos[2] + Math.sin(angle) * distM);
+    let my = 255;
+    while (my > 0 && !gb(mx, my, mz)) my--;
+    spawnMob(mx + 0.5, my + 1, mz + 0.5, Math.random() > 0.5 ? 'zombie' : 'cow');
+  }
+
+  if (!sp) {
+    const c = C.get(key(0, 0));
+    if (c && c.data) {
+      let y = 255;
+      while (y > 0 && !c.data[136 + 256 * y]) y--;
+      P_pos[1] = y + 1.01;
+      lastFallY = P_pos[1];
+      sp = 1;
+      updateHUD();
+    }
+  } else {
+    upd(dt);
+    updateMobs(dt);
+    updateDroppedItems(dt);
+
+    cam.position.set(P_pos[0], P_pos[1] + (sn ? 1.27 : 1.62), P_pos[2]);
+    cam.rotation.set(pitch, yaw, 0);
+    cam.updateMatrixWorld();
+
+    tg = ray();
+    hl.visible = !!tg && !inventoryOpen;
+    if (tg) hl.position.set(tg.c[0] + 0.5, tg.c[1] + 0.5, tg.c[2] + 0.5);
+
+    cool -= dt;
+    if (tg && cool <= 0 && !inventoryOpen) {
+      if (btn[0] && tg.c[1] > 0) {
+        const brokenBlockId = gb(tg.c[0], tg.c[1], tg.c[2]);
+        sb(tg.c[0], tg.c[1], tg.c[2], 0);
+        // Kırılan bloğu yere düşen minik eşya olarak oluştur
+        if (brokenBlockId && brokenBlockId !== 8) {
+          spawnDroppedItem(tg.c[0] + 0.5, tg.c[1] + 0.5, tg.c[2] + 0.5, brokenBlockId);
+        }
+        playSound('break');
+        hungerExhaustion += 0.05;
+        cool = 0.2;
+      } else if (btn[2]) {
+        const item = inventory[hotbarIndex];
+        if (item && item.count > 0) {
+          const [x, y, z] = tg.pr;
+          const ov2 = P_pos[0] - PW < x + 1 && P_pos[0] + PW > x && P_pos[1] < y + 1 && P_pos[1] + PH > y && P_pos[2] - PW < z + 1 && P_pos[2] + PW > z;
+          if (!ov2) {
+            sb(x, y, z, item.id);
+            item.count--;
+            if (item.count <= 0) inventory[hotbarIndex] = null;
+            playSound('place');
+            cool = 0.2;
+            updateHUD();
+          }
+        }
+      }
+    }
+  }
+
+  rd.render(scene, cam);
+  fc++; ft += dt;
+  if (ft > 0.5) {
+    st.innerHTML =
+      `FPS: <b>${Math.round(fc / ft)}</b> | Chunk: ${C.size} | Eşyalar: ${droppedItems.length} | Mobs: ${mobs.length}<br>` +
+      `XYZ: ${P_pos[0].toFixed(1)} / ${P_pos[1].toFixed(1)} / ${P_pos[2].toFixed(1)}` +
+      (fly ? ' <b style="color:#55ff55">[UÇUŞ]</b>' : '');
+    fc = 0; ft = 0;
+  }
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
